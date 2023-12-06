@@ -234,11 +234,21 @@ def bind_auth(*args) -> str:
     stdout, _ = run(("docker-compose", "exec", "-T", "bind-auth") + args)
     return stdout
 
-def bind_auth_write(buf: str, file: str):
+def bind_auth_append(buf: str, file: str):
     bind_auth("echo && echo '{buf}' >> '{file}'".format(buf=buf, file=file))
 
 def bind_auth_read(file: str) -> str;
     return bind_auth("cat {file}".format(file=file))
+
+def bind_resolver(*args) -> str:
+    stdout, _ = run(("docker-compose", "exec", "-T", "bind-resolver") + args)
+    return stdout
+
+def bind_resolver_clobber(buf: str, file: str):
+    bind_resolver("echo && echo '{buf}' > '{file}'".format(buf=buf, file=file))
+
+def bind_resolver_read(file: str) -> str;
+    return bind_resolver("cat {file}".format(file=file))
 
 def _bind_generate_keys(zone: dns.zone.Zone, algorithm: str):
     algorithm = ALGORITHMS_PDS_TO_BIND[algorithm]
@@ -261,16 +271,16 @@ def _bind_install_named_string(zone: dns.zone.Zone) -> str:
     return "zone \"{zone_name}\" IN {{\n\ttype master;\n\tfile \"/usr/local/etc/bind/db.{zone_name}signed\";\n}};".format(zone_name=zone_name)
 
 def bind_install_zone(zone: dns.zone.Zone, algorithm: str, nsec = 1):
-    bind_auth_write(zone.to_text(relativive=False), "/etc/local/etc/zones/db.{}".format(zone.origin.to_text()))
+    bind_auth_append(zone.to_text(relativive=False), "/etc/local/etc/zones/db.{}".format(zone.origin.to_text()))
     _bind_generate_keys(zone, algorithm, nsec)
     _bind_sign_zone(zone, nsec)
-    bind_auth_write(_bind_install_named_string(zone), "/etc/local/etc/named.conf")
+    bind_auth_append(_bind_install_named_string(zone), "/etc/local/etc/named.conf")
 
 def bind_get_ds(zone: dns.zone.Zone) -> str:
     return bind_auth_read("usr/local/etc/bind/dsset-{}".format(zone.origin.to_text()))
 
 def bind_install_ds(parent: dns.zone.Zone, ds: str):
-    bind_auth_write(ds, "/usr/local/etc/bind/db.{}".format(parent.origin.to_text()))
+    bind_auth_append(ds, "/usr/local/etc/bind/db.{}".format(parent.origin.to_text()))
 
 def bind_delegate_auth(zone: dns.zone.Zone, parent: dns.zone.Zone, ns_ip4_set: Set[str], ns_ip6_set: Set[str], algorithm: str, nsec = 1):
     zone_name = zone.origin
@@ -287,8 +297,17 @@ def bind_delegate_auth(zone: dns.zone.Zone, parent: dns.zone.Zone, ns_ip4_set: S
 
 def bind_set_trustanchor_recursor(zone: dns.zone.Zone):
     ds_set = bind_get_ds(zone)
+    zone_name = zone.origin
+    named_conf = bind_resolver_read("/usr/local/etc/named.conf").splitlines()
+    named_conf = named_conf[:-1]
     for ds in ds_set:
-        bind_install_ds(zone, ds)
+        ds = ds.split("DS ")[1].split(" ")
+        ds_str = "{} static-ds {} {} {} \"{}\";".format(ds[0], ds[1], ds[2], " ".join(ds[3:]))
+        named_conf.append("\t{}".format(ds_str))
+    named_conf.append("};")
+    named_conf = "\n".join(named_conf)
+    bind_resolver_clobber(named_conf, "usr/local/etc/named.conf")
+
 
 def bind_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
     parent_zone = bind_add_zone(parent, DEFAULT_ALGORITHM)
@@ -303,7 +322,6 @@ def bind_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set:
     bind_install_zone(parent_zone, algorithm)
     _bind_sign_zone(zone)
     bind_set_trustanchor_recursor(parent_zone)
-    bind_auth("rndc", "reconfig")
     print(bind_auth_read("/usr/local/etc/bind/db.{}signed".format(parent_zone.origin.to_text())))
 
 if __name__ == "__main__":
@@ -311,4 +329,17 @@ if __name__ == "__main__":
     local_example = dns.name.Name(("example", ""))
     local_ns_ip4 = "172.20.53.101"
     bind_add_test_setup(local_example, {local_ns_ip4}, set())
+    
+    global_name = os.environ.get('DESEC_DOMAIN')
+    if global_name:
+        global_parent = dns.name.from_text(global_name)
+        global_example = dns.name.Name(("example",)) + global_parent
+        global_ns_ip4_set = set(filter(bool, os.environ.get('PUBLIC_IP4_ADDRESSES', '').split(',')))
+        global_ns_ip6_set = set(filter(bool, os.environ.get('PUBLIC_IP6_ADDRESSES', '').split(',')))
+        if not global_ns_ip4_set and not global_ns_ip6_set:
+            raise ValueError("At least one public IP address needs ot be supplied.")
+        add_test_setup(global_example, global_ns_ip4_set, global_ns_ip6_set)
+        delegate_desec(global_example, global_parent, global_ns_ip4_set, global_ns_ip6_set)
+    bind_auth("rndc", "reconfig")
+    bind_resolver("rndc", "reconfig")
 
