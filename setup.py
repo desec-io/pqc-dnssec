@@ -36,6 +36,7 @@ def run(args, stdin: str = None) -> Tuple[str, str]:
     logging.debug(f"Running {args}")
     result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, input=stdin)
     logging.info(f"stdout: {result.stdout}")
+    logging.debug(f"stderr: {result.stderr}")
     return result.stdout, result.stderr
 
 
@@ -235,9 +236,13 @@ def bind_auth(*args) -> str:
     return stdout
 
 def bind_auth_append(buf: str, file: str):
-    bind_auth("echo && echo '{buf}' >> '{file}'".format(buf=buf, file=file))
+    bind_auth("sh", "-c", "echo \'\' >> '{file}'".format(buf=buf, file=file))
+    bind_auth("sh", "-c", "echo \'{buf}\' >> '{file}'".format(buf=buf, file=file))
 
-def bind_auth_read(file: str) -> str;
+def bind_auth_write(buf: str, file: str):
+    bind_auth("sh", "-c", "echo \'{buf}\' > '{file}'".format(buf=buf, file=file))
+
+def bind_auth_read(file: str) -> str:
     return bind_auth("cat {file}".format(file=file))
 
 def bind_resolver(*args) -> str:
@@ -247,23 +252,31 @@ def bind_resolver(*args) -> str:
 def bind_resolver_clobber(buf: str, file: str):
     bind_resolver("echo && echo '{buf}' > '{file}'".format(buf=buf, file=file))
 
-def bind_resolver_read(file: str) -> str;
+def bind_resolver_read(file: str) -> str:
     return bind_resolver("cat {file}".format(file=file))
 
 def _bind_generate_keys(zone: dns.zone.Zone, algorithm: str):
-    algorithm = ALGORITHMS_PDS_TO_BIND[algorithm]
+    algorithm = ALGORITHMS_PDNS_TO_BIND[algorithm]
     if algorithm.startswith("RSA"):
-        bind_auth("dnssec-keygen", "-a", algorithm, "-b", 2048, "-n", "ZONE", "-K", "usr/local/etc/bind/", zone.origin.to_text())
-        bind_auth("dnssec-keygen", "-a", algorithm, "-b", 2048, "-n", "ZONE", "-f", "KSK", "-K", "usr/local/etc/bind/", zone.origin.to_text())
+        bind_auth("dnssec-keygen", "-a", algorithm, "-b", "2048", "-n", "ZONE", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+        bind_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/{zone}key'".format(zone=zone.origin.to_text()))
+        bind_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/{zone}private'".format(zone=zone.origin.to_text()))
+        bind_auth("dnssec-keygen", "-a", algorithm, "-b", "2048", "-n", "ZONE", "-f", "KSK", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+        bind_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/KSK_{zone}key'".format(zone=zone.origin.to_text()))
+        bind_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/KSK_{zone}private'".format(zone=zone.origin.to_text()))
     else:
-        bind_auth("dnssec-keygen", "-a", algorithm, "-n", "ZONE", "-K", "usr/local/etc/bind/", zone.origin.to_text())
-        bind_auth("dnssec-keygen", "-a", algorithm, "-n", "ZONE", "-f", "KSK", "-K", "usr/local/etc/bind/", zone.origin.to_text())
+        bind_auth("dnssec-keygen", "-a", algorithm, "-n", "ZONE", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+        bind_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/{zone}key'".format(zone=zone.origin.to_text()))
+        bind_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/{zone}private'".format(zone=zone.origin.to_text()))
+        bind_auth("dnssec-keygen", "-a", algorithm, "-n", "ZONE", "-f", "KSK", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+        bind_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/KSK_{zone}key'".format(zone=zone.origin.to_text()))
+        bind_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/KSK_{zone}private'".format(zone=zone.origin.to_text()))
 
 def _bind_sign_zone(zone: dns.zone.Zone, nsec = 1):
     if nsec == 3:
-        bind_auth("dnssec-signzone", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT", "-t", "-S", "-3", "-K", "/usr/local/etc/bind", "db.{}".format(zone.origin.to_test()))
+        bind_auth("dnssec-signzone", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT", "-t", "-S", "-3", "-K", "/usr/local/etc/bind", "db.{}".format(zone.origin.to_text()))
     else:
-        bind_auth("dnssec-signzone", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT", "-t", "-S", "-K", "/usr/local/etc/bind", "db.{}".format(zone.origin.to_test()))
+        bind_auth("dnssec-signzone", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT", "-t", "-S", "-K", "/usr/local/etc/bind", "db.{}".format(zone.origin.to_text()))
 
 
 def _bind_install_named_string(zone: dns.zone.Zone) -> str:
@@ -271,13 +284,13 @@ def _bind_install_named_string(zone: dns.zone.Zone) -> str:
     return "zone \"{zone_name}\" IN {{\n\ttype master;\n\tfile \"/usr/local/etc/bind/db.{zone_name}signed\";\n}};".format(zone_name=zone_name)
 
 def bind_install_zone(zone: dns.zone.Zone, algorithm: str, nsec = 1):
-    bind_auth_append(zone.to_text(relativive=False), "/etc/local/etc/zones/db.{}".format(zone.origin.to_text()))
-    _bind_generate_keys(zone, algorithm, nsec)
+    bind_auth_write(zone.to_text(relativize=False), "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()))
+    _bind_generate_keys(zone, algorithm)
     _bind_sign_zone(zone, nsec)
-    bind_auth_append(_bind_install_named_string(zone), "/etc/local/etc/named.conf")
+    bind_auth_append(_bind_install_named_string(zone), "/usr/local/etc/named.conf")
 
 def bind_get_ds(zone: dns.zone.Zone) -> str:
-    return bind_auth_read("usr/local/etc/bind/dsset-{}".format(zone.origin.to_text()))
+    return bind_auth("dnssec-dsfromkey", "/usr/local/etc/bind/KSK_{}.key".format(zone.origin.to_text()[:-1]))
 
 def bind_install_ds(parent: dns.zone.Zone, ds: str):
     bind_auth_append(ds, "/usr/local/etc/bind/db.{}".format(parent.origin.to_text()))
@@ -292,11 +305,16 @@ def bind_delegate_auth(zone: dns.zone.Zone, parent: dns.zone.Zone, ns_ip4_set: S
     ns_records.add(dns.rdtypes.ANY.NS.NS(IN, NS, ns.to_text()))
     bind_install_zone(zone, algorithm, nsec)
     ds_set = bind_get_ds(zone)
-    for ds in ds_set:
+    for ds in ds_set.splitlines():
         bind_install_ds(parent, ds)
+    print(parent.to_text(relativize=False))
+    raise Exception("parent")
 
 def bind_set_trustanchor_recursor(zone: dns.zone.Zone):
     ds_set = bind_get_ds(zone)
+    print("===============================================")
+    print(ds_set)
+    print("===============================================")
     zone_name = zone.origin
     named_conf = bind_resolver_read("/usr/local/etc/named.conf").splitlines()
     named_conf = named_conf[:-1]
@@ -320,7 +338,7 @@ def bind_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set:
     for sb in subzones:
         print(subzones[sb].to_text(relativize=False))
     bind_install_zone(parent_zone, algorithm)
-    _bind_sign_zone(zone)
+    _bind_sign_zone(parent_zone)
     bind_set_trustanchor_recursor(parent_zone)
     print(bind_auth_read("/usr/local/etc/bind/db.{}signed".format(parent_zone.origin.to_text())))
 

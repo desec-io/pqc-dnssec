@@ -53,7 +53,7 @@ services:
       dockerfile: Dockerfile-bind-auth
     user: root
     volumes:
-      - ./auth.conf:/usr/local/etc/named.conf
+      - ./bind/auth.conf:/usr/local/etc/named.conf
     ports:
       - "${PUBLIC_TCP_UDP_PORT_AUTH:-5303}:53/tcp"
       - "${PUBLIC_TCP_UDP_PORT_AUTH:-5303}:53/udp"
@@ -68,7 +68,7 @@ services:
       dockerfile: Dockerfile-bind-resolver
     user: root
     volumes:
-      - ./resolver.conf:/usr/local/etc/named.conf
+      - ./bind/resolver.conf:/usr/local/etc/named.conf
     environment:
       - DESEC_DOMAIN
     ports:
