@@ -57,7 +57,6 @@ services:
     ports:
       - "${PUBLIC_TCP_UDP_PORT_AUTH:-5303}:53/tcp"
       - "${PUBLIC_TCP_UDP_PORT_AUTH:-5303}:53/udp"
-      - "127.0.0.1:5393:8083/tcp"
     networks:
       internal:
         ipv4_address: 172.20.53.103
@@ -74,7 +73,6 @@ services:
     ports:
       - "${PUBLIC_TCP_UDP_PORT_RECURSOR:-5304}:53/tcp"
       - "${PUBLIC_TCP_UDP_PORT_RECURSOR:-5304}:53/udp"
-      - "127.0.0.1:5394:8084/tcp"
     networks:
       internal:
         ipv4_address: 172.20.53.104

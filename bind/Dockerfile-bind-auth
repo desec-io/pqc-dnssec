@@ -11,14 +11,13 @@ RUN mkdir /liboqs/build
 RUN cd /liboqs/build && cmake -GNinja ..
 RUN cd /liboqs/build && ninja
 RUN cd /liboqs/build && ninja install
-RUN apt remove openssl -y
 RUN cd /openssl-source && ./Configure --prefix=/openssl --openssldir=/openssl -lm no-docs
 RUN cd /openssl-source && make
 RUN cd /openssl-source && make install
 RUN git clone https://github.com/open-quantum-safe/oqs-provider.git
 ENV OPENSSL_ROOT_DIR=/openssl
 ENV LD_LIBRARY_PATH=/usr/local/lib
-RUN cd /oqs-provider && cmake -DCMAKE_BUILD_TYPE=Debug -S . -B _build && cmake --build _build && ctest --test-dir _build && cmake --install _build
+RUN cd /oqs-provider && cmake -S . -B _build && cmake --build _build && ctest --test-dir _build && cmake --install _build
 
 RUN git clone https://github.com/Martyrshot/OQS-bind.git /bind9
 RUN cd bind9/ && autoreconf -fi
@@ -27,10 +26,9 @@ RUN cd bind9/ && make
 RUN cd bind9/ && make install
 RUN mkdir /usr/local/etc/bind
 RUN mkdir /var/cache/bind
+RUN rndc-confgen -a > rndc.key
 
-ENV OQSPROV=1
 ENV OPENSSL_MODULES=/openssl/lib/ossl-modules
 EXPOSE 53/udp
 EXPOSE 53/tcp
-#ENTRYPOINT ["find", ".", "-name", "oqsprovider.so"]
 ENTRYPOINT ["/usr/bin/tini", "--", "named", "-g", "-d", "1"]

@@ -15,9 +15,11 @@ RUN cd /openssl-source && ./Configure --prefix=/openssl --openssldir=/openssl no
 RUN cd /openssl-source && make
 RUN cd /openssl-source && make install
 RUN git clone https://github.com/open-quantum-safe/oqs-provider.git
-RUN cd /oqs-provider && OPENSSL_ROOT_DIR=/openssl cmake -S . -B _build && cmake --build _build && ctest --test-dir _build && cmake --install _build
-RUN git clone https://github.com/Martyrshot/OQS-bind.git /bind9
+ENV OPENSSL_ROOT_DIR=/openssl
 ENV LD_LIBRARY_PATH=/usr/local/lib
+RUN cd /oqs-provider && cmake -S . -B _build && cmake --build _build && ctest --test-dir _build && cmake --install _build
+
+RUN git clone https://github.com/Martyrshot/OQS-bind.git /bind9
 RUN cd bind9/ && autoreconf -fi
 RUN cd bind9/ && ./configure --with-openssl=/openssl
 RUN cd bind9/ && make
@@ -26,4 +28,10 @@ RUN mkdir /usr/local/etc/bind
 RUN mkdir /usr/local/etc/bind/zones
 RUN mkdir /var/cache/bind
 
-ENTRYPOINT ["/usr/bin/tini", "--", "named"]
+RUN rndc-confgen -a > rndc.key
+
+ENV OPENSSL_MODULES=/openssl/lib/ossl-modules
+EXPOSE 53/udp
+EXPOSE 53/tcp
+
+ENTRYPOINT ["/usr/bin/tini", "--", "named", "-g"]
