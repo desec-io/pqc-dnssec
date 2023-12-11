@@ -305,7 +305,7 @@ def bind9_get_ds(zone: dns.zone.Zone) -> dns.rdtypes.ANY.DS.DS:
         return s[s.startswith(prefix) and len(prefix):]
 
 
-    bind9_lines = bind9_auth("dnssec-dsfromkey", "/usr/local/etc/bind/KSK_{}.key".format(zone.origin.to_text()[:-1])).splitlines()
+    bind9_lines = bind9_auth("dnssec-dsfromkey", "/usr/local/etc/bind/KSK_{}".format(zone.origin.to_text()[:-1])).splitlines()
     ds_texts = [
         # remove extra information from dnssec-dsformkey output
         remove_prefix(
@@ -343,6 +343,8 @@ def bind9_delegate_auth(zone: dns.zone.Zone, parent: dns.zone.Zone, ns_ip4_set: 
     ns_records.add(dns.rdtypes.ANY.NS.NS(IN, NS, ns.to_text()))
     bind9_install_zone(zone, algorithm, nsec)
     ds_set = bind9_get_ds(zone)
+    if not ds_set:
+        raise Exception("Failed to find DS records")
     for ds in ds_set:
         bind9_install_ds(zone, parent, ds)
 
