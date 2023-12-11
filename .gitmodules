@@ -1,3 +1,3 @@
 [submodule "pdns"]
 	path = pdns
-	url = https://github.com/nils-wisiol/pdns.git
+	url = https://github.com/jgoertzen-sb/pdns
