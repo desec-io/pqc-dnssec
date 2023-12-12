@@ -26,13 +26,15 @@ SUPPORTED_ALGORITHMS = {
     5: "rsasha1", 8: "rsasha256", 10: "rsasha512",  # pdns also supports 7: "rsasha1-nsec3-sha1",
     13: "ecdsa256", 14: "ecdsa384",
     15: "ed25519", 16: "ed448",
-    17: "falcon",
+    17: "falcon", 18: "dilithium",
+    19: "sphincs",
 }
 ALGORITHMS_PDNS_TO_BIND = {
     "rsasha1": "RSASHA1", "rsasha256": "RSASHA256",
     "rsasha512": "RSASHA256", "ecdsa256": "ECDSA256",
     "ecdsa384": "ECDSA384", "ed25519": "ED25519",
     "ed448": "ED448", "falcon": "FALCON512",
+    "dilithium": "DILITHIUM2", "sphincs": "SPHINCS+-SHA256-128S",
 }
 
 def run(args, stdin: str = None) -> Tuple[str, str]:
@@ -174,6 +176,8 @@ def pdns_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set:
 
     for nsec in [1, 3]:
         for algorithm in SUPPORTED_ALGORITHMS.values():
+            if algorithm == "sphincs" or algorithm == "dilithium":
+                continue
             classic_example = dns.name.Name((algorithm + ('3' if nsec == 3 else ''),)) + parent
             pdns_add_zone(classic_example, algorithm, nsec)
             pdns_delegate_auth(classic_example, parent, ns_ip4_set, ns_ip6_set)
