@@ -66,7 +66,7 @@ def pdns_add_zone(name: dns.name.Name, algorithm: str, nsec: int = 1):
         pdns_auth("add-record", name.to_text(), subname, "A", "127.0.0.2")
         pdns_auth("add-record", name.to_text(), subname, "AAAA", "::1")
         pdns_auth("add-record", name.to_text(), subname, "TXT",
-             "\"FALCON DNSSEQ PoC; details: github.com/nils-wisiol/dns-falcon\"")
+             "\"FALCON DNSSEC PoC; details: github.com/jgoertzen-sb/dns-falcon\"")
     if algorithm.startswith('rsa'):
         pdns_auth("add-zone-key", name.to_text(), "2048", "active", algorithm)
     else:
@@ -213,7 +213,7 @@ def bind9_add_zone(name: dns.name.Name, algorithm: str) -> dns.zone.Zone:
         aaaa_records = node.find_rdataset(IN, AAAA, create=True)
         aaaa_records.add(dns.rdtypes.IN.AAAA.AAAA(IN, AAAA, "::1"))
         text_records = node.find_rdataset(IN, TXT, create=True)
-        text_records.add(dns.rdtypes.ANY.TXT.TXT(IN, TXT, "FALCON DNSSEQ PoC; details: github.com/nils-wisiol/dns-falcon"))
+        text_records.add(dns.rdtypes.ANY.TXT.TXT(IN, TXT, "FALCON, DILITHIUM, SPHINCS DNSSEC PoC; details: github.com/jgoertzen-sb/dns-falcon"))
     return zone
 
 def _bind9_delegate_set_ns_records(zone: dns.zone.Zone, parent: dns.zone.Zone, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
@@ -270,26 +270,47 @@ def bind9_resolver_clobber(buf: str, file: str):
 def bind9_resolver_read(file: str) -> str:
     return bind9_resolver("sh", "-c", "cat {file}".format(file=file))
 
-def _bind9_generate_keys(zone: dns.zone.Zone, algorithm: str):
-    algorithm = ALGORITHMS_PDNS_TO_BIND[algorithm]
-    if algorithm.startswith("RSA"):
-        bind9_auth("dnssec-keygen", "-a", algorithm, "-b", "2048", "-n", "ZONE", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
-        bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/{zone}key'".format(zone=zone.origin.to_text()))
-        bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/{zone}private'".format(zone=zone.origin.to_text()))
-        bind9_auth("dnssec-keygen", "-a", algorithm, "-b", "2048", "-n", "ZONE", "-f", "KSK", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
-        bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/KSK_{zone}key'".format(zone=zone.origin.to_text()))
-        bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/KSK_{zone}private'".format(zone=zone.origin.to_text()))
+def _bind9_generate_keys(zone: dns.zone.Zone, algorithm: str, nsec = 1):
+    assert nsec in [1, 3]
+    if nsec == 3:
+        algorithm = ALGORITHMS_PDNS_TO_BIND[algorithm]
+        if algorithm == "RSASHA1":
+            algorithm = "NSEC3RSASHA1"
+        if algorithm.startswith("RSA"):
+            bind9_auth("dnssec-keygen", "-3", "-a", algorithm, "-b", "2048", "-n", "ZONE", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/{zone}key'".format(zone=zone.origin.to_text()))
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/{zone}private'".format(zone=zone.origin.to_text()))
+            bind9_auth("dnssec-keygen", "-3", "-a", algorithm, "-b", "2048", "-n", "ZONE", "-f", "KSK", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/KSK_{zone}key'".format(zone=zone.origin.to_text()))
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/KSK_{zone}private'".format(zone=zone.origin.to_text()))
+        else:
+            bind9_auth("dnssec-keygen", "-3", "-a", algorithm, "-n", "ZONE", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/{zone}key'".format(zone=zone.origin.to_text()))
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/{zone}private'".format(zone=zone.origin.to_text()))
+            bind9_auth("dnssec-keygen", "-3", "-a", algorithm, "-n", "ZONE", "-f", "KSK", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/KSK_{zone}key'".format(zone=zone.origin.to_text()))
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/KSK_{zone}private'".format(zone=zone.origin.to_text()))
     else:
-        bind9_auth("dnssec-keygen", "-a", algorithm, "-n", "ZONE", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
-        bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/{zone}key'".format(zone=zone.origin.to_text()))
-        bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/{zone}private'".format(zone=zone.origin.to_text()))
-        bind9_auth("dnssec-keygen", "-a", algorithm, "-n", "ZONE", "-f", "KSK", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
-        bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/KSK_{zone}key'".format(zone=zone.origin.to_text()))
-        bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/KSK_{zone}private'".format(zone=zone.origin.to_text()))
+        algorithm = ALGORITHMS_PDNS_TO_BIND[algorithm]
+        if algorithm.startswith("RSA"):
+            bind9_auth("dnssec-keygen", "-a", algorithm, "-b", "2048", "-n", "ZONE", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/{zone}key'".format(zone=zone.origin.to_text()))
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/{zone}private'".format(zone=zone.origin.to_text()))
+            bind9_auth("dnssec-keygen", "-a", algorithm, "-b", "2048", "-n", "ZONE", "-f", "KSK", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/KSK_{zone}key'".format(zone=zone.origin.to_text()))
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/KSK_{zone}private'".format(zone=zone.origin.to_text()))
+        else:
+            bind9_auth("dnssec-keygen", "-a", algorithm, "-n", "ZONE", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/{zone}key'".format(zone=zone.origin.to_text()))
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/{zone}private'".format(zone=zone.origin.to_text()))
+            bind9_auth("dnssec-keygen", "-a", algorithm, "-n", "ZONE", "-f", "KSK", "-K", "/usr/local/etc/bind/", zone.origin.to_text())
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.key '/usr/local/etc/bind/KSK_{zone}key'".format(zone=zone.origin.to_text()))
+            bind9_auth("sh", "-c", "mv /usr/local/etc/bind/K{zone}*.private '/usr/local/etc/bind/KSK_{zone}private'".format(zone=zone.origin.to_text()))
+
 
 def _bind9_sign_zone(zone: dns.zone.Zone, nsec = 1):
     if nsec == 3:
-        bind9_auth("dnssec-signzone", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT", "-t", "-S", "-3", "-f", "/usr/local/etc/bind/db.{}signed".format(zone.origin.to_text()),  "/usr/local/etc/bin/db.{}".format(zone.origin.to_text()), "/usr/local/etc/bind/{}key".format(zone.origin.to_text()), "/usr/local/etc/bind/KSK_{}key".format(zone.origin.to_text()))
+        bind9_auth("dnssec-signzone", "-3", "-", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT", "-t", "-S", "-f", "/usr/local/etc/bind/db.{}signed".format(zone.origin.to_text()),  "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()), "/usr/local/etc/bind/{}key".format(zone.origin.to_text()), "/usr/local/etc/bind/KSK_{}key".format(zone.origin.to_text()))
     else:
         bind9_auth("dnssec-signzone", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT", "-t", "-S", "-f", "/usr/local/etc/bind/db.{}signed".format(zone.origin.to_text()), "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()), "/usr/local/etc/bind/{}key".format(zone.origin.to_text()), "/usr/local/etc/bind/KSK_{}key".format(zone.origin.to_text()))
 
@@ -300,7 +321,7 @@ def _bind9_install_named_string(zone: dns.zone.Zone) -> str:
 
 def bind9_install_zone(zone: dns.zone.Zone, algorithm: str, nsec = 1):
     bind9_auth_write(zone.to_text(relativize=False), "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()))
-    _bind9_generate_keys(zone, algorithm)
+    _bind9_generate_keys(zone, algorithm, nsec)
     _bind9_sign_zone(zone, nsec)
     bind9_auth_append(_bind9_install_named_string(zone), "/usr/local/etc/named.conf")
 
@@ -368,7 +389,7 @@ def bind9_set_trustanchor_recursor(zone: dns.zone.Zone):
 def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
     parent_zone = bind9_add_zone(parent, DEFAULT_ALGORITHM)
     subzones = dict()
-    for nsec in [1]:
+    for nsec in [1, 3]:
         for algorithm in SUPPORTED_ALGORITHMS.values():
             classic_example = dns.name.Name((algorithm + ('3' if nsec == 3 else ''),)) + parent
             subzones[classic_example] = bind9_add_zone(classic_example, algorithm)
