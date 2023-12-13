@@ -31,7 +31,7 @@ SUPPORTED_ALGORITHMS = {
 }
 ALGORITHMS_PDNS_TO_BIND = {
     "rsasha1": "RSASHA1", "rsasha256": "RSASHA256",
-    "rsasha512": "RSASHA256", "ecdsa256": "ECDSA256",
+    "rsasha512": "RSASHA512", "ecdsa256": "ECDSA256",
     "ecdsa384": "ECDSA384", "ed25519": "ED25519",
     "ed448": "ED448", "falcon": "FALCON512",
     "dilithium": "DILITHIUM2", "sphincs": "SPHINCS+-SHA256-128S",
