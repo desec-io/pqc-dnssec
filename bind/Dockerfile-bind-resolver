@@ -11,7 +11,7 @@ RUN mkdir /liboqs/build
 RUN cd /liboqs/build && cmake -GNinja ..
 RUN cd /liboqs/build && ninja
 RUN cd /liboqs/build && ninja install
-RUN cd /openssl-source && ./Configure -lm no-tests no-docs --libdir=lib
+RUN cd /openssl-source && ./Configure -lm no-docs --libdir=lib
 RUN cd /openssl-source && make
 RUN cd /openssl-source && make install
 RUN git clone https://github.com/open-quantum-safe/oqs-provider.git
