@@ -1,0 +1,31 @@
+FROM ubuntu:22.04
+
+RUN apt update -y
+RUN apt upgrade -y
+RUN apt update -y
+RUN DEBIAN_FRONTEND=noninteractive apt install ssh vim git pkg-config autoconf automake build-essential libnghttp2-dev libtool libtool-bin libuv1-dev libcap-dev libssl-dev iproute2 liburcu8 liburcu-dev tini -y
+RUN DEBIAN_FRONTEND=noninteractive apt install astyle cmake ninja-build libssl-dev python3-pytest python3-pytest-xdist unzip xsltproc doxygen graphviz -y
+RUN git clone --branch openssl-3.2.0-alpha2 https://github.com/openssl/openssl.git /openssl-source
+RUN git clone https://github.com/open-quantum-safe/liboqs.git
+RUN mkdir /liboqs/build
+RUN cd /liboqs/build && cmake -GNinja ..
+RUN cd /liboqs/build && ninja
+RUN cd /liboqs/build && ninja install
+RUN cd /openssl-source && ./Configure --prefix=/openssl --openssldir=/openssl -lm no-docs
+RUN cd /openssl-source && make
+RUN cd /openssl-source && make install
+RUN git clone https://github.com/open-quantum-safe/oqs-provider.git
+RUN cd /oqs-provider && OPENSSL_ROOT_DIR=/openssl cmake -S . -B _build && cmake --build _build && ctest --test-dir _build && cmake --install _build
+RUN git clone https://github.com/Martyrshot/OQS-bind.git /bind9
+ENV LD_LIBRARY_PATH=/usr/local/lib
+RUN cd bind9/ && autoreconf -fi
+RUN cd bind9/ && ./configure --with-openssl=/openssl
+RUN cd bind9/ && make
+RUN cd bind9/ && make install
+RUN mkdir /usr/local/etc/bind
+RUN mkdir /usr/local/etc/bind/zones
+RUN mkdir /var/cache/bind
+
+EXPOSE 53/udp
+EXPOSE 53/tcp
+ENTRYPOINT ["/usr/local/tini", "--", "named"]

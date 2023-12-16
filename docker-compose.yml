@@ -9,7 +9,7 @@ networks:
       com.docker.network.driver.mtu: 4096
 
 services:
-  auth:
+  pdns-auth:
     build:
       context: pdns
       dockerfile: Dockerfile-auth
@@ -27,7 +27,7 @@ services:
       internal:
         ipv4_address: 172.20.53.101
 
-  recursor:
+  pdns-recursor:
     build:
       context: pdns
       dockerfile: Dockerfile-recursor
@@ -46,6 +46,38 @@ services:
     networks:
       internal:
         ipv4_address: 172.20.53.102
+  
+  bind-auth:
+    build:
+      context: bind
+      dockerfile: Dockerfile-bind-auth
+    user: root
+    volumes:
+      - ./auth.conf:/usr/local/etc/named.conf
+    ports:
+      - "${PUBLIC_TCP_UDP_PORT_AUTH:-5303}:53/tcp"
+      - "${PUBLIC_TCP_UDP_PORT_AUTH:-5303}:53/udp"
+      - "127.0.0.1:5393:8083/tcp"
+    networks:
+      internal:
+        ipv4_address: 172.20.53.103
+
+  bind-recursor:
+    build:
+      context: bind
+      dockerfile: Dockerfile-bind-resolver
+    user: root
+    volumes:
+      - ./resolver.conf:/usr/local/etc/named.conf
+    environment:
+      - DESEC_DOMAIN
+    ports:
+      - "${PUBLIC_TCP_UDP_PORT_RECURSOR:-5304}:53/tcp"
+      - "${PUBLIC_TCP_UDP_PORT_RECURSOR:-5304}:53/udp"
+      - "127.0.0.1:5394:8084/tcp"
+    networks:
+      internal:
+        ipv4_address: 172.20.53.104
 
   dnsdist:
     build:
@@ -58,8 +90,8 @@ services:
       - "127.0.0.1:5383:80/tcp"
     networks:
       internal:
-        ipv4_address: 172.20.53.103
-
+        ipv4_address: 172.20.53.105
+  
   www:
     image: caddy:2
     restart: unless-stopped
