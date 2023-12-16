@@ -11,26 +11,25 @@ RUN mkdir /liboqs/build
 RUN cd /liboqs/build && cmake -GNinja ..
 RUN cd /liboqs/build && ninja
 RUN cd /liboqs/build && ninja install
-RUN cd /openssl-source && ./Configure --prefix=/openssl --openssldir=/openssl no-docs -lm
+RUN cd /openssl-source && ./Configure -lm no-tests no-docs --libdir=lib
 RUN cd /openssl-source && make
 RUN cd /openssl-source && make install
 RUN git clone https://github.com/open-quantum-safe/oqs-provider.git
-ENV OPENSSL_ROOT_DIR=/openssl
 ENV LD_LIBRARY_PATH=/usr/local/lib
 RUN cd /oqs-provider && cmake -S . -B _build && cmake --build _build && ctest --test-dir _build && cmake --install _build
 
 RUN git clone https://github.com/Martyrshot/OQS-bind.git /bind9
 RUN cd bind9/ && autoreconf -fi
-RUN cd bind9/ && ./configure --with-openssl=/openssl
+RUN cd bind9/ && ./configure
 RUN cd bind9/ && make
 RUN cd bind9/ && make install
 RUN mkdir /usr/local/etc/bind
 RUN mkdir /usr/local/etc/bind/zones
 RUN mkdir /var/cache/bind
-
 RUN rndc-confgen -a > rndc.key
 
-ENV OPENSSL_MODULES=/openssl/lib/ossl-modules
+COPY ./resolver.conf /usr/local/etc/named.conf
+
 EXPOSE 53/udp
 EXPOSE 53/tcp
 
