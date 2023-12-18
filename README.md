@@ -1,6 +1,11 @@
-# DNSSEQ: PowerDNS with FALCON Signature Scheme
+# DNSSEQ: PowerDNS with Post-quantum signatures
 
-PowerDNS-based proof-of-concept implementation of DNSSEC using the post-quantum FALCON signature scheme.
+PowerDNS-and-Bind9-based proof-of-concept implementation of DNSSEC using the post-quantum signature schemes FALCON512<sup>\*+</sup>,
+Dilithium2<sup>\*</sup>, and SPHINCS+-SHA256-128s<sup>\*</sup>.
+
+\* denotes Bind9 support.
+
++ denotes PowerDNS support.
 
 ## Usage
 
@@ -9,11 +14,15 @@ It contains both a FALCON-enabled authoritative DNS server and DNS recursor.
 
 ### Local Test Setup
 
-To test the PoC locally, clone this repository, install docker and docker-compose, and run
+To test the PoC locally, clone this repository, install docker and docker-compose, and run `setup.py`. `setup.py`
+has two optional arguments: `--bind9` and `--pdns` which specifies which implementation you wish to initialize.
+By default, if no arguments are specified, PowerDNS gets initialized.
 
+
+To test all implementations, run the following commands:
 ```
 docker-compose up -d
-python3 setup.py
+python3 setup.py --bind9 --pdns
 ```
 
 To run `setup.py`, Python 3.9, and some packages are required. If you want a clean install, create a virtual
@@ -31,14 +40,18 @@ The setup script will configure the authoritative with the following zones under
 - signed with 2048-bit RSA: `rsasha1.example.`, `rsasha256.example.`, `rsasha512.example.`
 - signed with elliptic curve algorithms: `ecdsa256.example.`, `ecdsa384.example.`
 - signed with Edwards curve algorithhms: `ed25519.example.`, `ed448.example.`
-- signed with post-quantum algorithm FALCON: `falcon.example.`
+- signed with post-quantum algorithm FALCON: `falcon.example.`, `dilithium.example.`, `sphincs.example.`
+
+Note: Currently only the bind9 based authoritative and recursor support `dilithium.example.` and `sphincs.example.`. Adding
+these algorithms to PowerDNS is an ongoing project.
 
 Both zones contain A and AAAA records pointing to localhost, as well as a TXT record stating the purpose of the zones.
 The zones are also equipped with A, AAAA, and TXT wildcard records.
 You can query the authoritative DNS server directly at `localhost:5301` (tcp/udp).
 
-The recursor, available at `localhost:5302` (tcp/udp), is now configured with the appropriate trust anchor for
-`.example`, so that queries for above zones will validated and answered with authenticated data (AD) bit:
+The recursors, available at `localhost:5302` (PowerDNS), and `localhost:5304` (Bind9) for both UDP and TCP, are now configured
+with the appropriate trust anchor for `.example`, so that queries for above zones will validated and answered with
+authenticated data (AD) bit:
 
 ```
 $ dig TXT @localhost -p 5302 falcon.example. +dnssec
@@ -103,7 +116,8 @@ The setup will create additional zones on your authoritative server,
     `rsasha512.example.${DESEC_DOMAIN}.`
 - signed with elliptic curve algorithms: `ecdsa256.example.${DESEC_DOMAIN}.`, `ecdsa384.example.${DESEC_DOMAIN}.`
 - signed with Edwards curve algorithhms: `ed25519.example.${DESEC_DOMAIN}.`, `ed448.example.${DESEC_DOMAIN}.`
-- signed with post-quantum algorithm FALCON: `falcon.example.${DESEC_DOMAIN}.`
+- signed with post-quantum algorithm FALCON: `falcon.example.${DESEC_DOMAIN}.`, `dilithium.example.${DESEC_DOMAIN}.`,
+`sphincs.example.${DESEC_DOMAIN}.`
 
 and use the `DESEC_TOKEN` to delegate `example.$DESEC_DOMAIN` to your local authoritative name server. (Before running,
 make your `DESEC_DOMAIN` exists in your deSEC account.)
@@ -147,25 +161,25 @@ docker-compose exec auth pdnsutil test-algorithms
 
 ## Tools
 
-To debug queries against the recursor, set up the query trace:
+To debug queries against the powerdns recursor, set up the query trace:
 
 ```
 docker-compose exec recursor rec_control trace-regex '.*example.*'
 ```
 
-To list all zones the authoritative DNS server serves, use:
+To list all zones the powerdns authoritative DNS server serves, use:
 
 ```
 docker-compose exec auth pdnsutil list-all-zones
 ```
 
-To export all zone data from the authoritative DNS server, use:
+To export all zone data from the powerdns authoritative DNS server, use:
 
 ```
 docker-compose exec auth bash -c 'echo ".dump" | sqlite3 /var/lib/powerdns/pdns.sqlite3'
 ```
 
-To dump recursor statistics into the log file, including the percentage of cache hits, use:
+To dump powerdns recursor statistics into the log file, including the percentage of cache hits, use:
 
 ```
 docker-compose exec recursor pkill -SIGUSR1 pdns
@@ -173,5 +187,7 @@ docker-compose exec recursor pkill -SIGUSR1 pdns
 
 ## Acknowledgements
 
-This work is based on the PowerDNS and openssl forks of [@gothremote](https://github.com/gothremote/),
+The PowerDNS and openssl forks used for this work was developed by [@gothremote](https://github.com/gothremote/),
 who worked on this for his Master's thesis.
+The Bind9 implementation used for this work was developed by [@Martyrshot](https://github.com/Martyrshot),
+which was originally worked on as part of his Master's thesis and updated during his time at [SandboxAQ](https://www.sandboxaq.com).
