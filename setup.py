@@ -386,7 +386,7 @@ def bind9_set_trustanchor_recursor(zone: dns.zone.Zone):
     bind9_resolver_clobber(named_conf, "/usr/local/etc/named.conf")
 
 
-def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
+def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]) -> dns.zone.Zone:
     parent_zone = bind9_add_zone(parent, DEFAULT_ALGORITHM)
     subzones = dict()
     for nsec in [1, 3]:
@@ -397,12 +397,13 @@ def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set
     _bind9_delegate_set_ns_records(parent_zone, None, ns_ip4_set, ns_ip6_set)
     bind9_install_zone(parent_zone, DEFAULT_ALGORITHM)
     _bind9_sign_zone(parent_zone)
-    bind9_set_trustanchor_recursor(parent_zone)
+    return parent_zone
 
 def bind9_setup():
     local_example = dns.name.Name(("example", ""))
     local_ns_ip4 = "172.20.53.101"
-    bind9_add_test_setup(local_example, {local_ns_ip4}, set())
+    local_zone = bind9_add_test_setup(local_example, {local_ns_ip4}, set())
+    bind9_set_trustanchor_recursor(local_zone)
     
     global_name = os.environ.get('DESEC_DOMAIN')
     if global_name:
