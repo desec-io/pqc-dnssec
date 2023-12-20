@@ -20,8 +20,8 @@ services:
     environment:
       - PDNS_AUTH_API_KEY='insecure'
     ports:
-      - "${PUBLIC_TCP_UDP_PORT_AUTH:-5301}:53/tcp"
-      - "${PUBLIC_TCP_UDP_PORT_AUTH:-5301}:53/udp"
+      - "${PUBLIC_TCP_UDP_PORT_PDNS_AUTH:-5301}:53/tcp"
+      - "${PUBLIC_TCP_UDP_PORT_PDNS_AUTH:-5301}:53/udp"
       - "127.0.0.1:5391:8081/tcp"
     networks:
       internal:
@@ -40,8 +40,8 @@ services:
       - PDNS_RECURSOR_API_KEY='insecure'
       - DESEC_DOMAIN
     ports:
-      - "${PUBLIC_TCP_UDP_PORT_RECURSOR:-5302}:53/tcp"
-      - "${PUBLIC_TCP_UDP_PORT_RECURSOR:-5302}:53/udp"
+      - "${PUBLIC_TCP_UDP_PORT_PDNS_RECURSOR:-5302}:53/tcp"
+      - "${PUBLIC_TCP_UDP_PORT_PDNS_RECURSOR:-5302}:53/udp"
       - "127.0.0.1:5392:8082/tcp"
     networks:
       internal:
@@ -53,8 +53,8 @@ services:
       dockerfile: Dockerfile-bind-auth
     user: root
     ports:
-      - "${PUBLIC_TCP_UDP_PORT_AUTH:-5303}:53/tcp"
-      - "${PUBLIC_TCP_UDP_PORT_AUTH:-5303}:53/udp"
+      - "${PUBLIC_TCP_UDP_PORT_BIND_AUTH:-5303}:53/tcp"
+      - "${PUBLIC_TCP_UDP_PORT_BIND_AUTH:-5303}:53/udp"
     networks:
       internal:
         ipv4_address: 172.20.53.103
@@ -67,8 +67,8 @@ services:
     environment:
       - DESEC_DOMAIN
     ports:
-      - "${PUBLIC_TCP_UDP_PORT_RECURSOR:-5304}:53/tcp"
-      - "${PUBLIC_TCP_UDP_PORT_RECURSOR:-5304}:53/udp"
+      - "${PUBLIC_TCP_UDP_PORT_BIND_RECURSOR:-5304}:53/tcp"
+      - "${PUBLIC_TCP_UDP_PORT_BIND_RECURSOR:-5304}:53/udp"
     networks:
       internal:
         ipv4_address: 172.20.53.104
