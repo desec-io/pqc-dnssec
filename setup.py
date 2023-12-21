@@ -427,7 +427,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    if (not args.bind9 and not args.powerdns) or args.powerdns:
+    if (not args.bind9 and not args.pdns) or args.pdns:
         pdns_setup()
     if args.bind9:
         bind9_setup()
