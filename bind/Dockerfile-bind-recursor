@@ -28,7 +28,7 @@ RUN mkdir /usr/local/etc/bind/zones
 RUN mkdir /var/cache/bind
 RUN rndc-confgen -a > rndc.key
 
-COPY ./resolver.conf /usr/local/etc/named.conf
+COPY ./recursor.conf /usr/local/etc/named.conf
 
 EXPOSE 53/udp
 EXPOSE 53/tcp

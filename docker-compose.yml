@@ -62,7 +62,7 @@ services:
   bind-recursor:
     build:
       context: bind
-      dockerfile: Dockerfile-bind-resolver
+      dockerfile: Dockerfile-bind-recursor
     user: root
     environment:
       - DESEC_DOMAIN

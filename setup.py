@@ -130,8 +130,8 @@ def pdns_delegate_auth(zone: dns.name.Name, parent: dns.name.Name, ns_ip4_set: S
         pdns_auth('add-record', parent.to_text(), subname.to_text(), 'DS', ds.to_text())
 
 
-def delegate_desec(zone: dns.name.Name, parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
-    ns = _delegate_set_ns_records(zone, parent, ns_ip4_set, ns_ip6_set)
+def pdns_delegate_desec(zone: dns.name.Name, parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
+    ns = _pdns_delegate_set_ns_records(zone, parent, ns_ip4_set, ns_ip6_set)
     data = json.dumps([
         {
             'subname': (ns - parent).to_text(),
@@ -155,7 +155,51 @@ def delegate_desec(zone: dns.name.Name, parent: dns.name.Name, ns_ip4_set: Set[s
             'subname': (zone - parent).to_text(),
             'ttl': 60,
             'type': 'DS',
-            'records': [rr.to_text() for rr in get_ds(zone)],
+            'records': [rr.to_text() for rr in pdns_get_ds(zone)],
+        },
+    ], indent=4)
+    logging.debug(f"Sending to deSEC:\n\n{data}\n\n")
+    response = requests.patch(
+        url=f"https://desec.io/api/v1/domains/{parent.to_text().rstrip('.')}/rrsets/",
+        headers={
+            'Authorization': f'Token {os.environ["DESEC_TOKEN"]}',
+            'Content-Type': 'application/json',
+        },
+        data=data
+    )
+    if response.status_code not in {200, 201, 204}:
+        raise Exception(f"Unexpected response with code {response.status_code}: {response.content}")
+
+def bind9_forward_global(name: dns.name.Name) -> dns.name.Name:
+    bind9_recursor_append("zone \"{zone_name}\" {{\n\ttype forward;\n\tforward only;\n\t forwarders {{ 172.20.53.103; }};\n}};\n".format(zone_name=name), "/usr/local/etc/named.conf")
+    return dns.name.Name(("ns",)) + name
+
+def bind9_delegate_desec(zone: dns.name.Name, parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
+    ns = bind9_forward_global(zone)
+    data = json.dumps([
+        {
+            'subname': (ns - parent).to_text(),
+            'ttl': 60,
+            'type': 'A',
+            'records': list(ns_ip4_set),
+        },
+        {
+            'subname': (ns - parent).to_text(),
+            'ttl': 60,
+            'type': 'AAAA',
+            'records': list(ns_ip6_set),
+        },
+        {
+            'subname': (zone - parent).to_text(),
+            'ttl': 60,
+            'type': 'NS',
+            'records': [ns.to_text()],
+        },
+        {
+            'subname': (zone - parent).to_text(),
+            'ttl': 60,
+            'type': 'DS',
+            'records': [rr.to_text() for rr in bind9_get_ds(zone)],
         },
     ], indent=4)
     logging.debug(f"Sending to deSEC:\n\n{data}\n\n")
@@ -254,21 +298,25 @@ def bind9_auth_append(buf: str, file: str):
     bind9_auth("sh", "-c", "echo '' >> '{file}'".format(buf=buf, file=file))
     bind9_auth("sh", "-c", "echo '{buf}' >> '{file}'".format(buf=buf, file=file))
 
-def bind9_auth_write(buf: str, file: str):
+def bind9_auth_clobber(buf: str, file: str):
     bind9_auth("sh", "-c", "echo '{buf}' > '{file}'".format(buf=buf, file=file))
 
 def bind9_auth_read(file: str) -> str:
     return bind9_auth("sh", "-c", "cat {file}".format(file=file))
 
-def bind9_resolver(*args) -> str:
-    stdout, _ = run(("docker-compose", "exec", "-T", "bind-resolver") + args)
+def bind9_recursor(*args) -> str:
+    stdout, _ = run(("docker-compose", "exec", "-T", "bind-recursor") + args)
     return stdout
 
-def bind9_resolver_clobber(buf: str, file: str):
-    bind9_resolver("sh", "-c", "echo '{buf}' > '{file}'".format(buf=buf, file=file))
+def bind9_recursor_clobber(buf: str, file: str):
+    bind9_recursor("sh", "-c", "echo '{buf}' > '{file}'".format(buf=buf, file=file))
 
-def bind9_resolver_read(file: str) -> str:
-    return bind9_resolver("sh", "-c", "cat {file}".format(file=file))
+def bind9_recursor_append(buf: str, file: str):
+    bind9_recursor("sh", "-c", "echo '' >> '{file}'".format(buf=buf, file=file))
+    bind9_recursor("sh", "-c", "echo '{buf}' >> '{file}'".format(buf=buf, file=file))
+
+def bind9_recursor_read(file: str) -> str:
+    return bind9_recursor("sh", "-c", "cat {file}".format(file=file))
 
 def _bind9_generate_keys(zone: dns.zone.Zone, algorithm: str, nsec = 1):
     assert nsec in [1, 3]
@@ -320,24 +368,24 @@ def _bind9_install_named_string(zone: dns.zone.Zone) -> str:
     return "zone \"{zone_name}\" IN {{\n    type master;\n    file \"/usr/local/etc/bind/db.{zone_name}signed\";\n}};".format(zone_name=zone_name)
 
 def bind9_install_zone(zone: dns.zone.Zone, algorithm: str, nsec = 1):
-    bind9_auth_write(zone.to_text(relativize=False), "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()))
+    bind9_auth_clobber(zone.to_text(relativize=False), "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()))
     _bind9_generate_keys(zone, algorithm, nsec)
     _bind9_sign_zone(zone, nsec)
     bind9_auth_append(_bind9_install_named_string(zone), "/usr/local/etc/named.conf")
 
-def bind9_get_ds(zone: dns.zone.Zone) -> dns.rdtypes.ANY.DS.DS:
+def bind9_get_ds(zone: dns.name.Name) -> dns.rdtypes.ANY.DS.DS:
     def remove_prefix(s, prefix):
         return s[s.startswith(prefix) and len(prefix):]
 
 
-    bind9_lines = bind9_auth("dnssec-dsfromkey", "/usr/local/etc/bind/KSK_{}".format(zone.origin.to_text()[:-1])).splitlines()
+    bind9_lines = bind9_auth("dnssec-dsfromkey", "/usr/local/etc/bind/KSK_{}".format(zone.to_text()[:-1])).splitlines()
     ds_texts = [
         # remove extra information from dnssec-dsformkey output
         remove_prefix(
             remove_prefix(
                 remove_prefix(
                     line,
-                    zone.origin.to_text()  # first remove the name
+                    zone.to_text()  # first remove the name
                 ).lstrip(),
                 'IN',  # then remove the IN
             ).lstrip(),
@@ -346,7 +394,7 @@ def bind9_get_ds(zone: dns.zone.Zone) -> dns.rdtypes.ANY.DS.DS:
         for line in bind9_lines
     ]
     try:
-        return dns.rrset.from_text_list(zone.origin.to_text(), 0, IN, DS, ds_texts)
+        return dns.rrset.from_text_list(zone.to_text(), 0, IN, DS, ds_texts)
     except dns.exception.SyntaxError:
         n = '\n'
         logging.debug(f"Could not obtain DS records for {zone.origin.to_text()}. "
@@ -367,23 +415,23 @@ def bind9_delegate_auth(zone: dns.zone.Zone, parent: dns.zone.Zone, ns_ip4_set: 
     ns_records = node.find_rdataset(IN, NS, create=True)
     ns_records.add(dns.rdtypes.ANY.NS.NS(IN, NS, ns.to_text()))
     bind9_install_zone(zone, algorithm, nsec)
-    ds_set = bind9_get_ds(zone)
+    ds_set = bind9_get_ds(zone.origin)
     if not ds_set:
         raise Exception("Failed to find DS records")
     for ds in ds_set:
         bind9_install_ds(zone, parent, ds)
 
 def bind9_set_trustanchor_recursor(zone: dns.zone.Zone):
-    ds_set = bind9_get_ds(zone)
+    ds_set = bind9_get_ds(zone.origin)
     zone_name = zone.origin
-    named_conf = bind9_resolver_read("/usr/local/etc/named.conf").splitlines()
+    named_conf = bind9_recursor_read("/usr/local/etc/named.conf").splitlines()
     named_conf = named_conf[:-1]
     for ds in ds_set:
         ds_str = "{} static-ds {} {} {} \"{}\";".format(zone.origin.to_text(), ds.key_tag, ds.algorithm, ds.digest_type, binascii.hexlify(ds.digest).decode('utf-8'))
         named_conf.append("    {}".format(ds_str))
     named_conf.append("};")
     named_conf = "\n".join(named_conf)
-    bind9_resolver_clobber(named_conf, "/usr/local/etc/named.conf")
+    bind9_recursor_clobber(named_conf, "/usr/local/etc/named.conf")
 
 
 def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]) -> dns.zone.Zone:
@@ -414,9 +462,9 @@ def bind9_setup():
         if not global_ns_ip4_set and not global_ns_ip6_set:
             raise ValueError("At least one public IP address needs ot be supplied.")
         bind9_add_test_setup(global_example, global_ns_ip4_set, global_ns_ip6_set)
-        delegate_desec(global_example, global_parent, global_ns_ip4_set, global_ns_ip6_set)
+        bind9_delegate_desec(global_example, global_parent, global_ns_ip4_set, global_ns_ip6_set)
     bind9_auth("rndc", "reconfig")
-    bind9_resolver("rndc", "reconfig")
+    bind9_recursor("rndc", "reconfig")
 
 
 if __name__ == "__main__":
