@@ -26,15 +26,15 @@ SUPPORTED_ALGORITHMS = {
     5: "rsasha1", 8: "rsasha256", 10: "rsasha512",  # pdns also supports 7: "rsasha1-nsec3-sha1",
     13: "ecdsa256", 14: "ecdsa384",
     15: "ed25519", 16: "ed448",
-    17: "falcon", 18: "dilithium",
-    19: "sphincs",
+    17: "falcon512", 18: "dilithium2",
+    19: "sphincs+-sha256-128s",
 }
 ALGORITHMS_PDNS_TO_BIND = {
     "rsasha1": "RSASHA1", "rsasha256": "RSASHA256",
     "rsasha512": "RSASHA512", "ecdsa256": "ECDSA256",
     "ecdsa384": "ECDSA384", "ed25519": "ED25519",
-    "ed448": "ED448", "falcon": "FALCON512",
-    "dilithium": "DILITHIUM2", "sphincs": "SPHINCS+-SHA256-128S",
+    "ed448": "ED448", "falcon512": "FALCON512",
+    "dilithium2": "DILITHIUM2", "sphincs+-sha256-128s": "SPHINCS+-SHA256-128S",
 }
 
 def run(args, stdin: str = None) -> Tuple[str, str]:
