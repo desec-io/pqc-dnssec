@@ -443,7 +443,7 @@ def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set
             zone_name = algorithm
             if algorithm == "sphincs+-sha256-128s":
                 zone_name = "sphincs-sha256-128s"
-            classic_example = dns.name.Name((algorithm + ('3' if nsec == 3 else ''),)) + parent
+            classic_example = dns.name.Name((zone_name + ('3' if nsec == 3 else ''),)) + parent
             subzones[classic_example] = bind9_add_zone(classic_example, algorithm)
             bind9_delegate_auth(subzones[classic_example], parent_zone, ns_ip4_set, ns_ip6_set, algorithm, nsec)
     _bind9_delegate_set_ns_records(parent_zone, None, ns_ip4_set, ns_ip6_set)
