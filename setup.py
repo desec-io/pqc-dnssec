@@ -220,7 +220,7 @@ def pdns_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set:
 
     for nsec in [1, 3]:
         for algorithm in SUPPORTED_ALGORITHMS.values():
-            if algorithm == "sphincs" or algorithm == "dilithium":
+            if algorithm == "sphincs+-sha256-128s" or algorithm == "dilithium2":
                 continue
             classic_example = dns.name.Name((algorithm + ('3' if nsec == 3 else ''),)) + parent
             pdns_add_zone(classic_example, algorithm, nsec)
