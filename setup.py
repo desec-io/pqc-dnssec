@@ -245,7 +245,7 @@ def pdns_setup():
         if not global_ns_ip4_set and not global_ns_ip6_set:
             raise ValueError("At least one public IP address needs ot be supplied.")
         pdns_add_test_setup(global_name, global_ns_ip4_set, global_ns_ip6_set)
-        pdns_recursor_append("forward-zones+={}".format(global_name.to_text()), "/etc/powerdns/recursor.d/recursor.conf")
+        pdns_recursor_append("forward-zones+={}={}".format(global_name.to_text(), local_ns_ip4), "/etc/powerdns/recursor.d/recursor.conf")
         pdns_recursor("reload-zones")
         pdns_delegate_desec(global_name, global_parent, global_ns_ip4_set, global_ns_ip6_set)
 
