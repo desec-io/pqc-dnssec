@@ -45,16 +45,19 @@ def run(args, stdin: str = None) -> Tuple[str, str]:
         logging.warning(f"stderr: {result.stderr}")
     return result.stdout, result.stderr
 
-
 def pdns_auth(*args) -> str:
     stdout, _ = run(("docker-compose", "exec", "-T", "pdns-auth", "pdnsutil") + args)
     return stdout
-
 
 def pdns_recursor(*args) -> str:
     stdout, _ = run(("docker-compose", "exec", "-T", "pdns-recursor", "rec_control") + args)
     return stdout
 
+def pdns_recursor_append(buf: str, file: str):
+    stdout, _ = run(("docker-compose", "exec", "-T", "pdns-recursor") + ("sh", "-c", "echo '' >> '{file}'".format(buf=buf, file=file)))
+    print(stdout)
+    stdout, _ = run(("docker-compose", "exec", "-T", "pdns-recursor") + ("sh", "-c", "echo '{buf}' >> '{file}'".format(buf=buf, file=file)))
+    print(stdout)
 
 def pdns_add_zone(name: dns.name.Name, algorithm: str, nsec: int = 1):
     assert nsec in {1, 3}
@@ -242,6 +245,8 @@ def pdns_setup():
         if not global_ns_ip4_set and not global_ns_ip6_set:
             raise ValueError("At least one public IP address needs ot be supplied.")
         pdns_add_test_setup(global_name, global_ns_ip4_set, global_ns_ip6_set)
+        pdns_recursor_append("forward-zones+={}".format(global_name.to_text()), "/etc/powerdns/recursor.d/recursor.conf")
+        pdns_recursor("reload-zones")
         pdns_delegate_desec(global_name, global_parent, global_ns_ip4_set, global_ns_ip6_set)
 
     pdns_auth('rectify-all-zones')
