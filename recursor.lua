@@ -1,6 +1,6 @@
 DESEC_DOMAIN = (os.getenv("DESEC_DOMAIN") or "")
-localPoC = newDN("example.")
-globalPoC = newDN("example."..DESEC_DOMAIN)
+localPoC = newDN("pdns.")
+globalPoC = newDN("pdns."..DESEC_DOMAIN)
 
 if DESEC_DOMAIN ~= "" then
   pdnslog("Accepting queries for **."..localPoC:toString().." and **."..globalPoC:toString()..".")
