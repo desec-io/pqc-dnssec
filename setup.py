@@ -60,7 +60,7 @@ def pdns_recursor_append(buf: str, file: str):
     print(stdout)
 
 def pdns_recursor_read(file: str) -> str:
-    stdout, _ = run(("docker-compose", "exec", "-T", "pdns-recursor") + ("sh", "-c", "cat {file}'".format(file=file)))
+    stdout, _ = run(("docker-compose", "exec", "-T", "pdns-recursor") + ("sh", "-c", "cat '{file}'".format(file=file)))
     return stdout
 
 def pdns_add_zone(name: dns.name.Name, algorithm: str, nsec: int = 1):
