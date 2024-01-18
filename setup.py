@@ -223,26 +223,26 @@ def pdns_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set:
             zone_name = algorithm
             if algorithm == "sphincs+-sha256-128s":
                 zone_name = "sphincs-sha256-128s"
-            classic_example = dns.name.Name((zone_name + ('3' if nsec == 3 else ''),)) + parent
-            pdns_add_zone(classic_example, algorithm, nsec)
-            pdns_delegate_auth(classic_example, parent, ns_ip4_set, ns_ip6_set)
+            classic_name = dns.name.Name((zone_name + ('3' if nsec == 3 else ''),)) + parent
+            pdns_add_zone(classic_name, algorithm, nsec)
+            pdns_delegate_auth(classic_name, parent, ns_ip4_set, ns_ip6_set)
 
 def pdns_setup():
-    local_example = dns.name.Name(("example", ""))
+    local_name = dns.name.Name(("pdns", ""))
     local_ns_ip4 = "172.20.53.101"
-    pdns_add_test_setup(local_example, {local_ns_ip4}, set())
-    pdns_set_trustanchor_recursor(local_example)
+    pdns_add_test_setup(local, {local_ns_ip4}, set())
+    pdns_set_trustanchor_recursor(local_name)
 
     global_name = os.environ.get('DESEC_DOMAIN')
     if global_name:
         global_parent = dns.name.from_text(global_name)
-        global_example = dns.name.Name(("example",)) + global_parent
+        global_name = dns.name.Name(("pdns",)) + global_parent
         global_ns_ip4_set = set(filter(bool, os.environ.get('PUBLIC_IP4_ADDRESSES', '').split(',')))
         global_ns_ip6_set = set(filter(bool, os.environ.get('PUBLIC_IP6_ADDRESSES', '').split(',')))
         if not global_ns_ip4_set and not global_ns_ip6_set:
             raise ValueError("At least one public IP address needs ot be supplied.")
-        pdns_add_test_setup(global_example, global_ns_ip4_set, global_ns_ip6_set)
-        pdns_delegate_desec(global_example, global_parent, global_ns_ip4_set, global_ns_ip6_set)
+        pdns_add_test_setup(global_name, global_ns_ip4_set, global_ns_ip6_set)
+        pdns_delegate_desec(global_name, global_parent, global_ns_ip4_set, global_ns_ip6_set)
 
     pdns_auth('rectify-all-zones')
 
@@ -443,30 +443,30 @@ def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set
             zone_name = algorithm
             if algorithm == "sphincs+-sha256-128s":
                 zone_name = "sphincs-sha256-128s"
-            classic_example = dns.name.Name((zone_name + ('3' if nsec == 3 else ''),)) + parent
-            subzones[classic_example] = bind9_add_zone(classic_example, algorithm)
-            bind9_delegate_auth(subzones[classic_example], parent_zone, ns_ip4_set, ns_ip6_set, algorithm, nsec)
+            classic_name = dns.name.Name((zone_name + ('3' if nsec == 3 else ''),)) + parent
+            subzones[classic_name] = bind9_add_zone(classic_name, algorithm)
+            bind9_delegate_auth(subzones[classic_name], parent_zone, ns_ip4_set, ns_ip6_set, algorithm, nsec)
     _bind9_delegate_set_ns_records(parent_zone, None, ns_ip4_set, ns_ip6_set)
     bind9_install_zone(parent_zone, DEFAULT_ALGORITHM)
     _bind9_sign_zone(parent_zone)
     return parent_zone
 
 def bind9_setup():
-    local_example = dns.name.Name(("example", ""))
+    local_name = dns.name.Name(("bind9", ""))
     local_ns_ip4 = "172.20.53.101"
-    local_zone = bind9_add_test_setup(local_example, {local_ns_ip4}, set())
+    local_zone = bind9_add_test_setup(local_name, {local_ns_ip4}, set())
     bind9_set_trustanchor_recursor(local_zone)
     
     global_name = os.environ.get('DESEC_DOMAIN')
     if global_name:
         global_parent = dns.name.from_text(global_name)
-        global_example = dns.name.Name(("example",)) + global_parent
+        global_name = dns.name.Name(("bind9",)) + global_parent
         global_ns_ip4_set = set(filter(bool, os.environ.get('PUBLIC_IP4_ADDRESSES', '').split(',')))
         global_ns_ip6_set = set(filter(bool, os.environ.get('PUBLIC_IP6_ADDRESSES', '').split(',')))
         if not global_ns_ip4_set and not global_ns_ip6_set:
             raise ValueError("At least one public IP address needs ot be supplied.")
-        bind9_add_test_setup(global_example, global_ns_ip4_set, global_ns_ip6_set)
-        bind9_delegate_desec(global_example, global_parent, global_ns_ip4_set, global_ns_ip6_set)
+        bind9_add_test_setup(global_name, global_ns_ip4_set, global_ns_ip6_set)
+        bind9_delegate_desec(global_name, global_parent, global_ns_ip4_set, global_ns_ip6_set)
     bind9_auth("rndc", "reconfig")
     bind9_recursor("rndc", "reconfig")
 
