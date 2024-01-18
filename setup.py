@@ -69,7 +69,7 @@ def pdns_add_zone(name: dns.name.Name, algorithm: str, nsec: int = 1):
         pdns_auth("add-record", name.to_text(), subname, "A", "127.0.0.2")
         pdns_auth("add-record", name.to_text(), subname, "AAAA", "::1")
         pdns_auth("add-record", name.to_text(), subname, "TXT",
-             "\"FALCON DNSSEC PoC; details: github.com/desec/dns-falcon\"")
+             "\"PQC-DNSSEC PoC; details: github.com/desec/dns-falcon\"")
     if algorithm.startswith('rsa'):
         pdns_auth("add-zone-key", name.to_text(), "2048", "active", algorithm)
     else:
@@ -263,7 +263,7 @@ def bind9_add_zone(name: dns.name.Name, algorithm: str) -> dns.zone.Zone:
         aaaa_records = node.find_rdataset(IN, AAAA, create=True)
         aaaa_records.add(dns.rdtypes.IN.AAAA.AAAA(IN, AAAA, "::1"))
         text_records = node.find_rdataset(IN, TXT, create=True)
-        text_records.add(dns.rdtypes.ANY.TXT.TXT(IN, TXT, "FALCON, DILITHIUM, SPHINCS DNSSEC PoC; details: github.com/desec/dns-falcon"))
+        text_records.add(dns.rdtypes.ANY.TXT.TXT(IN, TXT, "PQC-DNSSEC PoC; details: github.com/desec/dns-falcon"))
     return zone
 
 def _bind9_delegate_set_ns_records(zone: dns.zone.Zone, parent: dns.zone.Zone, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
