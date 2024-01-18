@@ -458,7 +458,7 @@ def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set
 
 def bind9_setup():
     local_name = dns.name.Name(("bind9", ""))
-    local_ns_ip4 = "172.20.53.101"
+    local_ns_ip4 = "172.20.53.103"
     local_zone = bind9_add_test_setup(local_name, {local_ns_ip4}, set())
     bind9_set_trustanchor_recursor(local_zone)
     
