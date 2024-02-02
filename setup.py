@@ -63,17 +63,22 @@ def pdns_recursor_read(file: str) -> str:
     stdout, _ = run(("docker-compose", "exec", "-T", "pdns-recursor") + ("sh", "-c", "cat '{file}'".format(file=file)))
     return stdout
 
-def pdns_add_zone(name: dns.name.Name, algorithm: str, nsec: int = 1):
+def pdns_add_zone(name: dns.name.Name, algorithm: str, zone_ip4_set: Set[str], zone_ip6_set: Set[str], nsec: int = 1):
     assert nsec in {1, 3}
     pdns_auth("create-zone", name.to_text())
     if nsec == 3:
         pdns_auth("set-nsec3", name.to_text(), '1 0 0 -', 'narrow')
+    if not zone_ip4_set and not zone_ip6_set:
+        raise ValueError(f"no ip addresses specified for {name}")
     for subname in ["@", "*"]:
-        pdns_auth("add-record", name.to_text(), subname, "A", "127.0.0.1")
-        pdns_auth("add-record", name.to_text(), subname, "A", "127.0.0.2")
-        pdns_auth("add-record", name.to_text(), subname, "AAAA", "::1")
+        if zone_ip4_set:
+            for zone_ip4 in zone_ip4_set:
+                pdns_auth("add-record", name.to_text(), subname, "A", zone_ip4)
+        if zone_ip6_set:
+            for zone_ip6 in zone_ip6_set:
+                pdns_auth("add-record", name.to_text(), subname, "AAAA", zone_ip6)
         pdns_auth("add-record", name.to_text(), subname, "TXT",
-             "\"PQC-DNSSEC PoC; details: github.com/desec/dns-falcon\"")
+             "\"PQC-DNSSEC PoC; details: github.com/desec-io/pqc-dnssec\"")
     if algorithm.startswith('rsa'):
         pdns_auth("add-zone-key", name.to_text(), "2048", "active", algorithm)
     else:
@@ -223,7 +228,7 @@ def bind9_delegate_desec(zone: dns.name.Name, parent: dns.name.Name, ns_ip4_set:
 
 
 def pdns_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
-    pdns_add_zone(parent, DEFAULT_ALGORITHM)
+    pdns_add_zone(parent, DEFAULT_ALGORITHM, ns_ip4_set, ns_ip6_set)
 
     for nsec in [1, 3]:
         for algorithm in SUPPORTED_ALGORITHMS.values():
@@ -231,7 +236,7 @@ def pdns_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set:
             if algorithm == "sphincs+-sha256-128s":
                 zone_name = "sphincs-sha256-128s"
             classic_name = dns.name.Name((zone_name + ('3' if nsec == 3 else ''),)) + parent
-            pdns_add_zone(classic_name, algorithm, nsec)
+            pdns_add_zone(classic_name, algorithm, ns_ip4_set, ns_ip6_set, nsec)
             pdns_delegate_auth(classic_name, parent, ns_ip4_set, ns_ip6_set)
 
 def pdns_setup():
@@ -260,19 +265,24 @@ def pdns_setup():
 
     pdns_auth('rectify-all-zones')
 
-def bind9_add_zone(name: dns.name.Name, algorithm: str) -> dns.zone.Zone:
+def bind9_add_zone(name: dns.name.Name, algorithm: str, zone_ip4_set: Set[str], zone_ip6_set: Set[str]) -> dns.zone.Zone:
     zone = dns.zone.Zone(origin=name)
     soa = zone.find_node(name, create=True).find_rdataset(IN, SOA, create=True)
     soa.add(dns.rdtypes.ANY.SOA.SOA(IN, SOA, dns.name.Name(("ns",)) + name, dns.name.Name(("jason", "goertzen", "sandboxaq", "com",)), 2023120401, 3600, 600, 604800, 3600))
+    if not zone_ip4_set and not zone_ip6_set:
+        raise ValueError(f"no ip addresses specified for {name}")
     for subname in ["@", "*"]:
         node = zone.find_node(subname, create=True)
-        a_records = node.find_rdataset(IN, A, create=True)
-        a_records.add(dns.rdtypes.IN.A.A(IN, A, "127.0.0.1"))
-        a_records.add(dns.rdtypes.IN.A.A(IN, A, "127.0.0.2"))
-        aaaa_records = node.find_rdataset(IN, AAAA, create=True)
-        aaaa_records.add(dns.rdtypes.IN.AAAA.AAAA(IN, AAAA, "::1"))
+        if zone_ip4_set:
+            a_records = node.find_rdataset(IN, A, create=True)
+            for zone_ip4 in zone_ip4_set:
+                a_records.add(dns.rdtypes.IN.A.A(IN, A, zone_ip4))
+        if zone_ip6_set:
+            aaaa_records = node.find_rdataset(IN, AAAA, create=True)
+            for zone_ip6 in zone_ip6_set:
+                aaaa_records.add(dns.rdtypes.IN.AAAA.AAAA(IN, AAAA, zone_ip6))
         text_records = node.find_rdataset(IN, TXT, create=True)
-        text_records.add(dns.rdtypes.ANY.TXT.TXT(IN, TXT, "PQC-DNSSEC PoC; details: github.com/desec/dns-falcon"))
+        text_records.add(dns.rdtypes.ANY.TXT.TXT(IN, TXT, "PQC-DNSSEC PoC; details: github.com/desec-io/pqc-dnssec"))
     return zone
 
 def _bind9_delegate_set_ns_records(zone: dns.zone.Zone, parent: dns.zone.Zone, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
@@ -458,7 +468,7 @@ def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set
             if algorithm == "sphincs+-sha256-128s":
                 zone_name = "sphincs-sha256-128s"
             classic_name = dns.name.Name((zone_name + ('3' if nsec == 3 else ''),)) + parent
-            subzones[classic_name] = bind9_add_zone(classic_name, algorithm)
+            subzones[classic_name] = bind9_add_zone(classic_name, algorithm, ns_ip4_set, ns_ip6_set)
             bind9_delegate_auth(subzones[classic_name], parent_zone, ns_ip4_set, ns_ip6_set, algorithm, nsec)
     _bind9_delegate_set_ns_records(parent_zone, None, ns_ip4_set, ns_ip6_set)
     bind9_install_zone(parent_zone, DEFAULT_ALGORITHM)
