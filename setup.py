@@ -460,7 +460,7 @@ def bind9_set_trustanchor_recursor(zone: dns.zone.Zone):
 
 
 def bind9_add_test_setup(parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]) -> dns.zone.Zone:
-    parent_zone = bind9_add_zone(parent, DEFAULT_ALGORITHM)
+    parent_zone = bind9_add_zone(parent, DEFAULT_ALGORITHM, ns_ip4_set, ns_ip6_set)
     subzones = dict()
     for nsec in [1, 3]:
         for algorithm in SUPPORTED_ALGORITHMS.values():
