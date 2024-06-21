@@ -46,7 +46,7 @@ services:
     networks:
       internal:
         ipv4_address: 172.20.53.102
-  
+
   bind-auth:
     build:
       context: bind
@@ -74,10 +74,7 @@ services:
         ipv4_address: 172.20.53.104
 
   dnsdist:
-    build:
-      context: pdns
-      dockerfile: Dockerfile-dnsdist
-    image: desec/pqdnssec-dnsdist:latest
+    image: powerdns/dnsdist-19:latest
     volumes:
       - ./dnsdist.conf:/etc/dnsdist/dnsdist.conf
     ports:
@@ -85,7 +82,7 @@ services:
     networks:
       internal:
         ipv4_address: 172.20.53.105
-  
+
   www:
     image: caddy:2
     restart: unless-stopped
