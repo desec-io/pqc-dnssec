@@ -23,18 +23,24 @@ DS = dns.rdatatype.from_text("DS")
 NS = dns.rdatatype.from_text("NS")
 DEFAULT_ALGORITHM = "ecdsa256"
 SUPPORTED_ALGORITHMS = {
+    0: "unsigned",
     5: "rsasha1", 8: "rsasha256", 10: "rsasha512",  # pdns also supports 7: "rsasha1-nsec3-sha1",
     13: "ecdsa256", 14: "ecdsa384",
     15: "ed25519", 16: "ed448",
     17: "falcon512", 18: "dilithium2",
     19: "sphincs+-sha256-128s",
+    21404: "xmssmt-sha256-h40-4",
+    21408: "xmssmt-sha256-h40-8",
 }
 ALGORITHMS_PDNS_TO_BIND = {
+    "unsigned": "UNSIGNED",
     "rsasha1": "RSASHA1", "rsasha256": "RSASHA256",
     "rsasha512": "RSASHA512", "ecdsa256": "ECDSA256",
     "ecdsa384": "ECDSA384", "ed25519": "ED25519",
     "ed448": "ED448", "falcon512": "FALCON512",
     "dilithium2": "DILITHIUM2", "sphincs+-sha256-128s": "SPHINCS+-SHA256-128S",
+    "xmssmt-sha256-h40-4": "XMSSMT_SHA256_H40_4",
+    "xmssmt-sha256-h40-8": "XMSSMT_SHA256_H40_8",
 }
 
 def run(args, stdin: str = None) -> Tuple[str, str]:
@@ -66,11 +72,11 @@ def pdns_recursor_read(file: str) -> str:
 def pdns_add_zone(name: dns.name.Name, algorithm: str, zone_ip4_set: Set[str], zone_ip6_set: Set[str], nsec: int = 1):
     assert nsec in {1, 3}
     pdns_auth("create-zone", name.to_text())
-    if nsec == 3:
+    if algorithm != "unsigned" and nsec == 3:
         pdns_auth("set-nsec3", name.to_text(), '1 0 0 -', 'narrow')
     if not zone_ip4_set and not zone_ip6_set:
         raise ValueError(f"no ip addresses specified for {name}")
-    for subname in ["@", "*"]:
+    for subname in ["@"]:
         if zone_ip4_set:
             for zone_ip4 in zone_ip4_set:
                 pdns_auth("add-record", name.to_text(), subname, "A", zone_ip4)
@@ -79,7 +85,9 @@ def pdns_add_zone(name: dns.name.Name, algorithm: str, zone_ip4_set: Set[str], z
                 pdns_auth("add-record", name.to_text(), subname, "AAAA", zone_ip6)
         pdns_auth("add-record", name.to_text(), subname, "TXT",
              "\"PQC-DNSSEC PoC; details: github.com/desec-io/pqc-dnssec\"")
-    if algorithm.startswith('rsa'):
+    if algorithm == "unsigned":
+        pass
+    elif algorithm.startswith('rsa'):
         pdns_auth("add-zone-key", name.to_text(), "2048", "active", algorithm)
     else:
         pdns_auth("add-zone-key", name.to_text(), "active", algorithm)
@@ -137,9 +145,10 @@ def pdns_delegate_auth(zone: dns.name.Name, parent: dns.name.Name, ns_ip4_set: S
     ns = _pdns_delegate_set_ns_records(zone, parent, ns_ip4_set, ns_ip6_set)
     subname = zone - parent
     pdns_auth('add-record', parent.to_text(), subname.to_text(), 'NS', ns.to_text())
-    ds_set = pdns_get_ds(zone)
-    for ds in ds_set:
-        pdns_auth('add-record', parent.to_text(), subname.to_text(), 'DS', ds.to_text())
+    if not subname.to_text().startswith("unsigned"):
+        ds_set = pdns_get_ds(zone)
+        for ds in ds_set:
+            pdns_auth('add-record', parent.to_text(), subname.to_text(), 'DS', ds.to_text())
 
 
 def pdns_delegate_desec(zone: dns.name.Name, parent: dns.name.Name, ns_ip4_set: Set[str], ns_ip6_set: Set[str]):
@@ -271,7 +280,7 @@ def bind9_add_zone(name: dns.name.Name, algorithm: str, zone_ip4_set: Set[str], 
     soa.add(dns.rdtypes.ANY.SOA.SOA(IN, SOA, dns.name.Name(("ns",)) + name, dns.name.Name(("jason", "goertzen", "sandboxaq", "com",)), 2023120401, 3600, 600, 604800, 3600))
     if not zone_ip4_set and not zone_ip6_set:
         raise ValueError(f"no ip addresses specified for {name}")
-    for subname in ["@", "*"]:
+    for subname in ["@"]:
         node = zone.find_node(subname, create=True)
         if zone_ip4_set:
             a_records = node.find_rdataset(IN, A, create=True)
@@ -385,12 +394,15 @@ def _bind9_sign_zone(zone: dns.zone.Zone, nsec = 1):
     if nsec == 3:
         bind9_auth("dnssec-signzone", "-3", "-", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT", "-t", "-S", "-f", "/usr/local/etc/bind/db.{}signed".format(zone.origin.to_text()),  "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()), "/usr/local/etc/bind/{}key".format(zone.origin.to_text()), "/usr/local/etc/bind/KSK_{}key".format(zone.origin.to_text()))
     else:
-        bind9_auth("dnssec-signzone", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT", "-t", "-S", "-f", "/usr/local/etc/bind/db.{}signed".format(zone.origin.to_text()), "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()), "/usr/local/etc/bind/{}key".format(zone.origin.to_text()), "/usr/local/etc/bind/KSK_{}key".format(zone.origin.to_text()))
+        bind9_auth("dnssec-signzone", "-a", "-o", zone.origin.to_text(), "-N", "INCREMENT",  "-t", "-S", "-f", "/usr/local/etc/bind/db.{}signed".format(zone.origin.to_text()), "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()), "/usr/local/etc/bind/{}key".format(zone.origin.to_text()), "/usr/local/etc/bind/KSK_{}key".format(zone.origin.to_text()))
 
 
 def _bind9_install_named_string(zone: dns.zone.Zone) -> str:
     zone_name = zone.origin.to_text()
-    return "zone \"{zone_name}\" IN {{\n    type master;\n    file \"/usr/local/etc/bind/db.{zone_name}signed\";\n}};".format(zone_name=zone_name)
+    if zone_name.startswith("unsigned"):
+        return "zone \"{zone_name}\" IN {{\n    type master;\n    file \"/usr/local/etc/bind/db.{zone_name}\";\n}};".format(zone_name=zone_name)
+    else:
+        return "zone \"{zone_name}\" IN {{\n    type master;\n    file \"/usr/local/etc/bind/db.{zone_name}signed\";\n}};".format(zone_name=zone_name)
 
 def bind9_install_zone(zone: dns.zone.Zone, algorithm: str, nsec = 1):
     bind9_auth_clobber(zone.to_text(relativize=False), "/usr/local/etc/bind/db.{}".format(zone.origin.to_text()))
@@ -440,11 +452,12 @@ def bind9_delegate_auth(zone: dns.zone.Zone, parent: dns.zone.Zone, ns_ip4_set: 
     ns_records = node.find_rdataset(IN, NS, create=True)
     ns_records.add(dns.rdtypes.ANY.NS.NS(IN, NS, ns.to_text()))
     bind9_install_zone(zone, algorithm, nsec)
-    ds_set = bind9_get_ds(zone.origin)
-    if not ds_set:
-        raise Exception("Failed to find DS records")
-    for ds in ds_set:
-        bind9_install_ds(zone, parent, ds)
+    if not subname.to_text().startswith("unsigned"):
+        ds_set = bind9_get_ds(zone.origin)
+        if not ds_set:
+            raise Exception("Failed to find DS records")
+        for ds in ds_set:
+            bind9_install_ds(zone, parent, ds)
 
 def bind9_set_trustanchor_recursor(zone: dns.zone.Zone):
     ds_set = bind9_get_ds(zone.origin)
