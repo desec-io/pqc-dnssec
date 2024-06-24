@@ -45,7 +45,7 @@ services:
       - "127.0.0.1:5392:8082/tcp"
     networks:
       internal:
-        ipv4_address: 172.20.53.102
+        ipv4_address: "${IP_PDNS_RECURSOR:-172.20.53.102}"
 
   bind-auth:
     build:
@@ -71,7 +71,7 @@ services:
       - "${PUBLIC_TCP_UDP_PORT_BIND_RECURSOR:-5304}:53/udp"
     networks:
       internal:
-        ipv4_address: 172.20.53.104
+        ipv4_address: "${IP_BIND_RECURSOR:-172.20.53.104}"
 
   dnsdist:
     image: powerdns/dnsdist-19:latest
