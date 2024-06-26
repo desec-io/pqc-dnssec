@@ -64,6 +64,8 @@ services:
       context: bind
       dockerfile: Dockerfile-bind-recursor
     user: root
+    volumes:
+      - ./rpz.zone:/usr/local/etc/bind/zones/rpz.zone
     environment:
       - DESEC_DOMAIN
     ports:
