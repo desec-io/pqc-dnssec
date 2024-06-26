@@ -1,7 +1,3 @@
-pdns.{$DESEC_DOMAIN}, localhost {
+{$DESEC_DOMAIN_PREFIX}.{$DESEC_DOMAIN}, localhost {
     reverse_proxy /dns-query 172.20.53.105:80
-}
-
-{$DESEC_DOMAIN_REDIRECT:noop.local} {
-    redir https://{$DESEC_DOMAIN}{uri} permanent
 }

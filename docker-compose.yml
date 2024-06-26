@@ -98,7 +98,7 @@ services:
       - ./web/dist:/webapp
     environment:
       - DESEC_DOMAIN
-      - DESEC_DOMAIN_REDIRECT
+      - DESEC_DOMAIN_PREFIX
     networks:
       internal:
         ipv4_address: 172.20.53.200
