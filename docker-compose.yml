@@ -45,8 +45,8 @@ services:
       - "127.0.0.1:5392:8082/tcp"
     networks:
       internal:
-        ipv4_address: 172.20.53.102
-  
+        ipv4_address: "${IP_PDNS_RECURSOR:-172.20.53.102}"
+
   bind-auth:
     build:
       context: bind
@@ -64,6 +64,8 @@ services:
       context: bind
       dockerfile: Dockerfile-bind-recursor
     user: root
+    volumes:
+      - ./rpz.zone:/usr/local/etc/bind/zones/rpz.zone
     environment:
       - DESEC_DOMAIN
     ports:
@@ -71,13 +73,10 @@ services:
       - "${PUBLIC_TCP_UDP_PORT_BIND_RECURSOR:-5304}:53/udp"
     networks:
       internal:
-        ipv4_address: 172.20.53.104
+        ipv4_address: "${IP_BIND_RECURSOR:-172.20.53.104}"
 
   dnsdist:
-    build:
-      context: pdns
-      dockerfile: Dockerfile-dnsdist
-    image: desec/pqdnssec-dnsdist:latest
+    image: powerdns/dnsdist-19:latest
     volumes:
       - ./dnsdist.conf:/etc/dnsdist/dnsdist.conf
     ports:
@@ -85,7 +84,7 @@ services:
     networks:
       internal:
         ipv4_address: 172.20.53.105
-  
+
   www:
     image: caddy:2
     restart: unless-stopped
@@ -99,7 +98,7 @@ services:
       - ./web/dist:/webapp
     environment:
       - DESEC_DOMAIN
-      - DESEC_DOMAIN_REDIRECT
+      - DESEC_DOMAIN_PREFIX
     networks:
       internal:
         ipv4_address: 172.20.53.200
