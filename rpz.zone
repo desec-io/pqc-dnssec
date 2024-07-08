@@ -1,0 +1,10 @@
+$TTL 1H
+@                       SOA LOCALHOST. pqc.desec.io (1 1h 15m 30d 2h)
+            NS  LOCALHOST.
+
+*                             CNAME   .  ; NXDOMAIN policy
+*.io                          CNAME   .
+*.dedyn.io                    CNAME   .
+*.pq-dnssec.dedyn.io          CNAME   .
+bind9.pq-dnssec.dedyn.io      CNAME   rpz-passthru.
+pdns.pq-dnssec.dedyn.io       CNAME   rpz-passthru.
